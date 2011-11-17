@@ -1,0 +1,21 @@
+<html>
+
+<head>
+<title>Blog Archive</title>
+<link rel="stylesheet" href="http://jfloren.net/blog/style.css" type="text/css" media="screen, handheld" title="default">
+</head>
+
+<body>
+<h1 id="title">John Floren</h1>
+<div id="hnav">
+<a href="http://jfloren.net">Home</a> | <a href="http://jfloren.net/blog/">Blog</a>
+</div>
+
+<div id="content">
+<h2>Blog Archive</h2>
+{{range .Years}}<h3>{{.Year}}</h3>
+{{range .Posts}}<a href="{{.Path}}">{{.Title}}</a>{{end}}{{end}}
+</div>
+</body>
+
+</html>
