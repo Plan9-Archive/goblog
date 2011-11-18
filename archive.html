@@ -8,13 +8,15 @@
 <body>
 <h1 id="title">John Floren</h1>
 <div id="hnav">
-<a href="http://jfloren.net">Home</a> | <a href="http://jfloren.net/blog/">Blog</a>
+<a href="http://jfloren.net">Home</a> | <a href="http://jfloren.net/b/">Blog</a>
 </div>
 
 <div id="content">
 <h2>Blog Archive</h2>
 {{range .Years}}<h3>{{.Year}}</h3>
-{{range .Posts}}<a href="{{.Path}}">{{.Title}}</a>{{end}}{{end}}
+<ul>
+{{range .Posts}}<li><b>{{.Date}}</b> - <a href="{{.Path}}">{{.Title}}</a><br>{{end}}
+</ul>{{end}}
 </div>
 </body>
 

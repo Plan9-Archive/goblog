@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"template"
 	"bufio"
+	"github.com/russross/blackfriday"
 )
 
 const (
@@ -19,6 +20,7 @@ const (
 	Day
 	Post
 
+// These will need to be set externally, eventually
 	root = "/usr/john/www/"
 	blogdir = "/b/"
 )
@@ -44,6 +46,7 @@ type BlogPost struct {
 	Path	string // e.g. "/b/2011/11/16/0"
 	Title	string // e.g. "My First Post"
 	Body	string // the file converted to HTML
+	Date	string
 }
 
 func GenYear(year string) (res []*BlogPost) {
@@ -58,7 +61,6 @@ func GenYear(year string) (res []*BlogPost) {
 	}
 	for _, month := range months {
 		if month.IsDirectory() {
-			fmt.Printf("month = %v\n", month.Name)
 			g, err := os.Open(root + blogdir + year + "/" + month.Name)
 			if err != nil {
 				fmt.Print(err)
@@ -73,7 +75,6 @@ func GenYear(year string) (res []*BlogPost) {
 			// Step through the list of days
 			for _, day := range days {
 				if day.IsDirectory() {
-					fmt.Printf("day = %v\n", day.Name)
 					h, err := os.Open(root + blogdir + year + "/" + month.Name + "/" + day.Name)
 					if err != nil {
 						fmt.Print(err)
@@ -87,7 +88,6 @@ func GenYear(year string) (res []*BlogPost) {
 					}
 					// Step through the posts under this day
 					for _, post := range posts {
-						fmt.Printf("post = %v\n", post.Name)
 						p, err := os.Open(root + blogdir + year + "/" + month.Name + "/" + day.Name + "/" + post.Name)
 						if err != nil {
 							fmt.Print(err)
@@ -96,11 +96,8 @@ func GenYear(year string) (res []*BlogPost) {
 						defer p.Close()
 						read := bufio.NewReader(p)
 						title, _, err := read.ReadLine()
-						fmt.Printf("read title = %v, err = %v\n", title, err)
 						if err == nil {
-							fmt.Printf("appending a post with title\n")
-							res = append(res, &BlogPost{blogdir + year + "/" + month.Name + "/" + day.Name + "/" + post.Name, string(title), ""})
-							fmt.Printf("res is now %v\n", res)
+							res = append([]*BlogPost{&BlogPost{blogdir + year + "/" + month.Name + "/" + day.Name + "/" + post.Name, string(title), "", month.Name + "/" + day.Name}}, res...)
 						} else {
 							fmt.Print(err)
 						}
@@ -120,12 +117,14 @@ func GenArchivePage() (res Archive) {
 	for _, info := range fi {
 		if info.IsDirectory() {
 			y = &ArchiveYear{info.Name, GenYear(info.Name)}
-			res.Years = append(res.Years, y)
+			res.Years = append([]*ArchiveYear{y}, res.Years...)
 		}
 	}
 	return res
 }
 
+// I'm not actually sure most of this is required, but it may
+// come in handy at some point.
 func NewRequest(path string) (r *Request) {
 	r = new(Request)
 
@@ -133,7 +132,6 @@ func NewRequest(path string) (r *Request) {
 	if path == "" {
 		splitpath = []string{}
 	}
-	fmt.Printf("%#v splits to %#v\n", path, splitpath)
 
 	switch len(splitpath) {
 		case 4:
@@ -164,19 +162,19 @@ func BlogServer(w http.ResponseWriter, req *http.Request) {
 
 	bp := new(BlogPost)
 
+	// Two choices: Either specify a full post,
+	// or get sent to the archive page.
 	switch r.Type {
 	case Post:
 		tmp, _ := ioutil.ReadFile(base + path)
-		bp.Body = string(tmp)
-		t := template.Must(template.ParseFile("/usr/john/goweb/page.html"))
+		bp.Body = string(blackfriday.MarkdownCommon(tmp))
+		bp.Date = strconv.Itoa(r.Year) + "/" + strconv.Itoa(r.Month) + "/" + strconv.Itoa(r.Day)
+		t := template.Must(template.ParseFile(base + "/page.html"))
 		t.Execute(w, bp)
-		break
 	default:
 		archive := GenArchivePage()
-		fmt.Printf("posts = %v\n", (archive.Years[0].Posts))
-		t := template.Must(template.ParseFile("/usr/john/goweb/archive.html"))
+		t := template.Must(template.ParseFile(base + "/archive.html"))
 		t.Execute(w, archive)
-		break
 	}
 }
 
@@ -184,7 +182,7 @@ func main() {
 	os.Chdir(root)
 	http.HandleFunc(blogdir, BlogServer)
 	http.Handle("/", http.FileServer(http.Dir(root)))
-	err := http.ListenAndServe(":12345", nil)
+	err := http.ListenAndServe(":80", nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err.String())
 	}
