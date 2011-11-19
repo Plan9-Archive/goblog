@@ -1,0 +1,12 @@
+{
+	"Root": "/usr/john/www/",
+	"Blogdir": "/b/",
+	"Shortname": "jfloren",
+	"Subdomains":
+	[
+		{
+			"Domain": "gproc.org/",
+			"Path": "/gproc/"
+		}
+	]
+}

@@ -1,0 +1,27 @@
+This is a very simple blogging system for Go, intended to run on Plan 9. It serves static files from /, blog entries under a special directory, and can also host subdomains.
+
+Quickstart
+----------
+
+You need to have a Disqus account to enable commenting, although commenting can be easily disabled.
+
+1. Run 'mk all; mk install; mk copyconfig; mk setupblog'. This will build the binary, copy it to your $home/bin/386/ directory, copy config.json to /lib/goweb.config, create $home/www/b/, and then copy page.html and archive.html to $home/www/b.
+2. Edit /lib/goweb.conf. The only required elements are "Root", "Blogdir", and "Shortname", as shown in config.minimal. You can also add subdomains, as shown in config.json; the "Path" element is relative to the web root.
+3. If you want to enable commenting, set your Disqus shortname in goweb.config. If you don't want comments, edit $home/www/b/page.html and remove the Disqus javascript block.
+3. Run $home/bin/386/goweb, preferably as user 'none'. I do this with the command "auth/none /usr/john/bin/386/goweb &", which I have also placed in my /cfg/$sysname/cpustart file so it will launch on reboot.
+
+Detailed Description
+--------------------
+
+Goweb uses the http and template packages, along with Russ Ross's Black Friday implementation of Markdown, to serve blog posts from a directory tree. It also uses Disqus to implement commenting.
+
+All files live under a web root directory. By default, the b/ subdirectory of the webroot hosts a tree of blog posts in the following format:
+
+b/	# Blog directory
+	2011/	# Year
+		11/	# Month
+			19/	# Day
+				0 # Post
+				1
+
+The location of the web root, the name of the blog subdirectory, the site's Disqus shortname, and any subdomains are defined in the config file, which defaults to /lib/goweb.config.

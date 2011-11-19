@@ -10,6 +10,8 @@ import (
 	"io/ioutil"
 	"template"
 	"bufio"
+	"flag"
+	"json"
 	"github.com/russross/blackfriday"
 )
 
@@ -19,11 +21,24 @@ const (
 	Month
 	Day
 	Post
-
-// These will need to be set externally, eventually
-	root = "/usr/john/www/"
-	blogdir = "/b/"
 )
+
+var (
+	config	Config
+	configpath	string
+)
+
+type Config struct {
+	Root	string
+	Blogdir	string
+	Shortname	string // disqus shortname
+	Subdomains	[]Subdomain
+}
+
+type Subdomain struct {
+	Domain	string
+	Path	string
+}
 	
 type Request struct {
 	Year	int
@@ -47,10 +62,17 @@ type BlogPost struct {
 	Title	string // e.g. "My First Post"
 	Body	string // the file converted to HTML
 	Date	string
+
+	Shortname	string // the Disqus shortname of your site.
+}
+
+func init() {
+	flag.StringVar(&configpath, "config", "/lib/goweb.config", "Path to configuration file")
+	flag.Parse()
 }
 
 func GenYear(year string) (res []*BlogPost) {
-	f, err := os.Open(root + blogdir + year)
+	f, err := os.Open(config.Root + config.Blogdir + year)
 	if err != nil {
 		fmt.Print(err)
 	}
@@ -61,7 +83,7 @@ func GenYear(year string) (res []*BlogPost) {
 	}
 	for _, month := range months {
 		if month.IsDirectory() {
-			g, err := os.Open(root + blogdir + year + "/" + month.Name)
+			g, err := os.Open(config.Root + config.Blogdir + year + "/" + month.Name)
 			if err != nil {
 				fmt.Print(err)
 				return
@@ -75,7 +97,7 @@ func GenYear(year string) (res []*BlogPost) {
 			// Step through the list of days
 			for _, day := range days {
 				if day.IsDirectory() {
-					h, err := os.Open(root + blogdir + year + "/" + month.Name + "/" + day.Name)
+					h, err := os.Open(config.Root + config.Blogdir + year + "/" + month.Name + "/" + day.Name)
 					if err != nil {
 						fmt.Print(err)
 						return
@@ -88,7 +110,7 @@ func GenYear(year string) (res []*BlogPost) {
 					}
 					// Step through the posts under this day
 					for _, post := range posts {
-						p, err := os.Open(root + blogdir + year + "/" + month.Name + "/" + day.Name + "/" + post.Name)
+						p, err := os.Open(config.Root + config.Blogdir + year + "/" + month.Name + "/" + day.Name + "/" + post.Name)
 						if err != nil {
 							fmt.Print(err)
 							return
@@ -97,7 +119,7 @@ func GenYear(year string) (res []*BlogPost) {
 						read := bufio.NewReader(p)
 						title, _, err := read.ReadLine()
 						if err == nil {
-							res = append([]*BlogPost{&BlogPost{blogdir + year + "/" + month.Name + "/" + day.Name + "/" + post.Name, string(title), "", month.Name + "/" + day.Name}}, res...)
+							res = append([]*BlogPost{&BlogPost{config.Blogdir + year + "/" + month.Name + "/" + day.Name + "/" + post.Name, string(title), "", month.Name + "/" + day.Name, ""}}, res...)
 						} else {
 							fmt.Print(err)
 						}
@@ -111,7 +133,7 @@ func GenYear(year string) (res []*BlogPost) {
 
 func GenArchivePage() (res Archive) {
 	var y *ArchiveYear
-	f, _ := os.Open(root + blogdir)
+	f, _ := os.Open(config.Root + config.Blogdir)
 	defer f.Close()
 	fi, _ := f.Readdir(0)
 	for _, info := range fi {
@@ -155,8 +177,8 @@ func NewRequest(path string) (r *Request) {
 
 func BlogServer(w http.ResponseWriter, req *http.Request) {
 
-	path := req.URL.Path[len(blogdir):]
-	base := root + blogdir
+	path := req.URL.Path[len(config.Blogdir):]
+	base := config.Root + config.Blogdir
 
 	r := NewRequest(path)
 
@@ -169,6 +191,7 @@ func BlogServer(w http.ResponseWriter, req *http.Request) {
 		tmp, _ := ioutil.ReadFile(base + path)
 		bp.Body = string(blackfriday.MarkdownCommon(tmp))
 		bp.Date = strconv.Itoa(r.Year) + "/" + strconv.Itoa(r.Month) + "/" + strconv.Itoa(r.Day)
+		bp.Shortname = config.Shortname
 		p, err := os.Open(base + path)
 		if err != nil {
 			fmt.Print(err)
@@ -186,10 +209,28 @@ func BlogServer(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func ReadConfig(path string) (c Config) {
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		fmt.Print(err)
+		panic("Couldn't read config file")
+	}
+
+	err = json.Unmarshal(b, &c)
+	if err != nil {
+		fmt.Print(err)
+		panic("Couldn't parse json")
+	}
+	return
+}
+
 func main() {
-	os.Chdir(root)
-	http.HandleFunc(blogdir, BlogServer)
-	http.Handle("/", http.FileServer(http.Dir(root)))
+	config = ReadConfig(configpath)
+	http.HandleFunc(config.Blogdir, BlogServer)
+	http.Handle("/", http.FileServer(http.Dir(config.Root)))
+	for _, s := range config.Subdomains {
+		http.Handle(s.Domain, http.FileServer(http.Dir(config.Root + s.Path)))
+	}
 	err := http.ListenAndServe(":80", nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err.String())
