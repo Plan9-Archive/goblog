@@ -169,6 +169,14 @@ func BlogServer(w http.ResponseWriter, req *http.Request) {
 		tmp, _ := ioutil.ReadFile(base + path)
 		bp.Body = string(blackfriday.MarkdownCommon(tmp))
 		bp.Date = strconv.Itoa(r.Year) + "/" + strconv.Itoa(r.Month) + "/" + strconv.Itoa(r.Day)
+		p, err := os.Open(base + path)
+		if err != nil {
+			fmt.Print(err)
+			return
+		}
+		read := bufio.NewReader(p)
+		title, _, err := read.ReadLine()
+		bp.Title = string(title)
 		t := template.Must(template.ParseFile(base + "/page.html"))
 		t.Execute(w, bp)
 	default:
