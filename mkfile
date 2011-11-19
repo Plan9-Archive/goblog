@@ -13,5 +13,5 @@ copyconfig:
 	cp config.json /lib/goweb.config
 
 install:
-	cp 8.out $home/www/goweb
+	cp 8.out $home/bin/386/goweb
 
