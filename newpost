@@ -1,0 +1,25 @@
+#!/bin/rc
+
+# You'll want to change this variable
+blogdir=$home/www/b
+
+months=(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec)
+
+wordmonth=`{date | awk '{print $2}'}
+day=`{date | awk '{print $3}'}
+year=`{date | awk '{print $6}'}
+
+for (i in `{seq 1 12}) {
+	if (~ $months($i) $wordmonth) {
+		month=$i
+	}
+}
+
+directory=$blogdir/$year/$month/$day
+echo Creating $directory
+mkdir -p $directory
+
+posts=`{ls $directory}
+echo There are already $#posts posts for this day, creating a new one now.
+touch $directory/$#posts
+B $directory/$#posts
