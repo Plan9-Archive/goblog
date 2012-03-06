@@ -12,6 +12,7 @@ import (
 	"bufio"
 	"flag"
 	"json"
+	"sort"
 	"github.com/russross/blackfriday"
 )
 
@@ -54,7 +55,7 @@ type Archive struct {
 
 type ArchiveYear struct {
 	Year	string
-	Posts	[]*BlogPost
+	Posts	bplist
 }
 
 type BlogPost struct {
@@ -66,30 +67,48 @@ type BlogPost struct {
 	Shortname	string // the Disqus shortname of your site.
 }
 
+type bplist []*BlogPost
+
+func (bp bplist) Len() int {
+	return len(bp)
+}
+
+// This is all jenky, because I want to sort backwards. Evil, I know.
+func (bp bplist) Less(i, j int) bool {
+	si := strings.Split(bp[i].Date, "/")
+	sj := strings.Split(bp[j].Date, "/")
+	imon, _ := strconv.Atoi(si[0])
+	jmon, _ := strconv.Atoi(sj[0])
+	iday, _ := strconv.Atoi(si[1])
+	jday, _ := strconv.Atoi(sj[1])
+
+	if imon > jmon {
+		return true
+	}
+	if imon == jmon && iday > jday {
+		return true
+	}
+	return false
+}
+
+func (bp bplist) Swap(i, j int) {
+	bp[i], bp[j] = bp[j], bp[i]
+}
+	
+
 func init() {
 	flag.StringVar(&configpath, "config", "/lib/goweb.config", "Path to configuration file")
 	flag.Parse()
 }
 
-func GenYear(year string) (res []*BlogPost) {
-	f, err := os.Open(config.Root + config.Blogdir + year)
-	if err != nil {
-		fmt.Print(err)
-	}
-	defer f.Close()
-	months, err := f.Readdir(0)
+func GenYear(year string) (res bplist) {
+	months, err := ioutil.ReadDir(config.Root + config.Blogdir + year)
 	if err != nil {
 		fmt.Print(err)
 	}
 	for _, month := range months {
 		if month.IsDirectory() {
-			g, err := os.Open(config.Root + config.Blogdir + year + "/" + month.Name)
-			if err != nil {
-				fmt.Print(err)
-				return
-			}
-			defer g.Close()
-			days, err := g.Readdir(0)
+			days, err := ioutil.ReadDir(config.Root + config.Blogdir + year + "/" + month.Name)
 			if err != nil {
 				fmt.Print(err)
 				return
@@ -97,13 +116,7 @@ func GenYear(year string) (res []*BlogPost) {
 			// Step through the list of days
 			for _, day := range days {
 				if day.IsDirectory() {
-					h, err := os.Open(config.Root + config.Blogdir + year + "/" + month.Name + "/" + day.Name)
-					if err != nil {
-						fmt.Print(err)
-						return
-					}
-					defer h.Close()
-					posts, err := h.Readdir(0)
+					posts, err := ioutil.ReadDir(config.Root + config.Blogdir + year + "/" + month.Name + "/" + day.Name)
 					if err != nil {
 						fmt.Print(err)
 						return
@@ -119,7 +132,7 @@ func GenYear(year string) (res []*BlogPost) {
 						read := bufio.NewReader(p)
 						title, _, err := read.ReadLine()
 						if err == nil {
-							res = append([]*BlogPost{&BlogPost{config.Blogdir + year + "/" + month.Name + "/" + day.Name + "/" + post.Name, string(title), "", month.Name + "/" + day.Name, ""}}, res...)
+							res = append(res, &BlogPost{config.Blogdir + year + "/" + month.Name + "/" + day.Name + "/" + post.Name, string(title), "", month.Name + "/" + day.Name, ""})
 						} else {
 							fmt.Print(err)
 						}
@@ -128,6 +141,7 @@ func GenYear(year string) (res []*BlogPost) {
 			}
 		}
 	}
+	sort.Sort(res)
 	return res
 }
 
