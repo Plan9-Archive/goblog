@@ -51,6 +51,7 @@ type Request struct {
 
 type Archive struct {
 	Years	[]*ArchiveYear
+	Shortname	string // the Disqus shortname for the site
 }
 
 type ArchiveYear struct {
@@ -156,6 +157,7 @@ func GenArchivePage() (res Archive) {
 			res.Years = append([]*ArchiveYear{y}, res.Years...)
 		}
 	}
+	res.Shortname = config.Shortname
 	return res
 }
 
