@@ -7,7 +7,7 @@ You need to have a Disqus account to enable commenting, although commenting can 
 
 1. Run 'mk all; mk install; mk copyconfig; mk setupblog'. This will build the binary, copy it to your $home/bin/386/ directory, copy config.json to /lib/goweb.config, create $home/www/b/, and then copy page.html and archive.html to $home/www/b.
 2. Edit /lib/goweb.conf. The only required elements are "Root", "Blogdir", and "Shortname", as shown in config.minimal. You can also add subdomains, as shown in config.json; the "Path" element is relative to the web root.
-3. If you want to enable commenting, set your Disqus shortname in goweb.config. If you don't want comments, edit $home/www/b/page.html and remove the Disqus javascript block.
+3. If you want to enable commenting, set your Disqus shortname in goweb.config. If you don't want comments, edit $home/www/b/page.html and remove the Disqus javascript block. You also definitely need to edit the html files to put your own name in there instead of mine.
 3. Run $home/bin/386/goweb, preferably as user 'none'. I do this with the command "auth/none /usr/john/bin/386/goweb &", which I have also placed in my /cfg/$sysname/cpustart file so it will launch on reboot.
 
 Detailed Description
