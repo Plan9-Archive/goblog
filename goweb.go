@@ -1,19 +1,19 @@
 package main
 
 import (
-	"http"
-	"log"
-	"strings"
-	"strconv"
-	"fmt"
-	"os"
-	"io/ioutil"
-	"template"
 	"bufio"
+	"encoding/json"
 	"flag"
-	"json"
-	"sort"
+	"fmt"
 	"github.com/russross/blackfriday"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"os"
+	"sort"
+	"strconv"
+	"strings"
+	"text/template"
 )
 
 const (
@@ -25,47 +25,47 @@ const (
 )
 
 var (
-	config	Config
-	configpath	string
+	config     Config
+	configpath string
 )
 
 type Config struct {
-	Root	string
-	Blogdir	string
-	Shortname	string // disqus shortname
-	Subdomains	[]Subdomain
+	Root       string
+	Blogdir    string
+	Shortname  string // disqus shortname
+	Subdomains []Subdomain
 }
 
 type Subdomain struct {
-	Domain	string
-	Path	string
+	Domain string
+	Path   string
 }
-	
+
 type Request struct {
-	Year	int
-	Month	int
-	Day		int
-	Post	int
-	Type	int
+	Year  int
+	Month int
+	Day   int
+	Post  int
+	Type  int
 }
 
 type Archive struct {
-	Years	[]*ArchiveYear
-	Shortname	string // the Disqus shortname for the site
+	Years     []*ArchiveYear
+	Shortname string // the Disqus shortname for the site
 }
 
 type ArchiveYear struct {
-	Year	string
-	Posts	bplist
+	Year  string
+	Posts bplist
 }
 
 type BlogPost struct {
-	Path	string // e.g. "/b/2011/11/16/0"
-	Title	string // e.g. "My First Post"
-	Body	string // the file converted to HTML
-	Date	string
+	Path  string // e.g. "/b/2011/11/16/0"
+	Title string // e.g. "My First Post"
+	Body  string // the file converted to HTML
+	Date  string
 
-	Shortname	string // the Disqus shortname of your site.
+	Shortname string // the Disqus shortname of your site.
 }
 
 type bplist []*BlogPost
@@ -95,7 +95,6 @@ func (bp bplist) Less(i, j int) bool {
 func (bp bplist) Swap(i, j int) {
 	bp[i], bp[j] = bp[j], bp[i]
 }
-	
 
 func init() {
 	flag.StringVar(&configpath, "config", "/lib/goweb.config", "Path to configuration file")
@@ -108,23 +107,23 @@ func GenYear(year string) (res bplist) {
 		fmt.Print(err)
 	}
 	for _, month := range months {
-		if month.IsDirectory() {
-			days, err := ioutil.ReadDir(config.Root + config.Blogdir + year + "/" + month.Name)
+		if month.IsDir() {
+			days, err := ioutil.ReadDir(config.Root + config.Blogdir + year + "/" + month.Name())
 			if err != nil {
 				fmt.Print(err)
 				return
 			}
 			// Step through the list of days
 			for _, day := range days {
-				if day.IsDirectory() {
-					posts, err := ioutil.ReadDir(config.Root + config.Blogdir + year + "/" + month.Name + "/" + day.Name)
+				if day.IsDir() {
+					posts, err := ioutil.ReadDir(config.Root + config.Blogdir + year + "/" + month.Name() + "/" + day.Name())
 					if err != nil {
 						fmt.Print(err)
 						return
 					}
 					// Step through the posts under this day
 					for _, post := range posts {
-						p, err := os.Open(config.Root + config.Blogdir + year + "/" + month.Name + "/" + day.Name + "/" + post.Name)
+						p, err := os.Open(config.Root + config.Blogdir + year + "/" + month.Name() + "/" + day.Name() + "/" + post.Name())
 						if err != nil {
 							fmt.Print(err)
 							return
@@ -133,7 +132,7 @@ func GenYear(year string) (res bplist) {
 						read := bufio.NewReader(p)
 						title, _, err := read.ReadLine()
 						if err == nil {
-							res = append(res, &BlogPost{config.Blogdir + year + "/" + month.Name + "/" + day.Name + "/" + post.Name, string(title), "", month.Name + "/" + day.Name, ""})
+							res = append(res, &BlogPost{config.Blogdir + year + "/" + month.Name() + "/" + day.Name() + "/" + post.Name(), string(title), "", month.Name() + "/" + day.Name(), ""})
 						} else {
 							fmt.Print(err)
 						}
@@ -152,8 +151,8 @@ func GenArchivePage() (res Archive) {
 	defer f.Close()
 	fi, _ := f.Readdir(0)
 	for _, info := range fi {
-		if info.IsDirectory() {
-			y = &ArchiveYear{info.Name, GenYear(info.Name)}
+		if info.Mode().IsDir() {
+			y = &ArchiveYear{info.Name(), GenYear(info.Name())}
 			res.Years = append([]*ArchiveYear{y}, res.Years...)
 		}
 	}
@@ -172,18 +171,18 @@ func NewRequest(path string) (r *Request) {
 	}
 
 	switch len(splitpath) {
-		case 4:
-			r.Post, _ = strconv.Atoi(splitpath[3])
-			fallthrough
-		case 3:
-			r.Day, _ = strconv.Atoi(splitpath[2])
-			fallthrough
-		case 2:
-			r.Month, _ = strconv.Atoi(splitpath[1])
-			fallthrough
-		case 1:
-			r.Year, _ = strconv.Atoi(splitpath[0])
-			break;
+	case 4:
+		r.Post, _ = strconv.Atoi(splitpath[3])
+		fallthrough
+	case 3:
+		r.Day, _ = strconv.Atoi(splitpath[2])
+		fallthrough
+	case 2:
+		r.Month, _ = strconv.Atoi(splitpath[1])
+		fallthrough
+	case 1:
+		r.Year, _ = strconv.Atoi(splitpath[0])
+		break
 	}
 
 	r.Type = len(splitpath)
@@ -213,14 +212,15 @@ func BlogServer(w http.ResponseWriter, req *http.Request) {
 			fmt.Print(err)
 			return
 		}
+		defer p.Close()
 		read := bufio.NewReader(p)
 		title, _, err := read.ReadLine()
 		bp.Title = string(title)
-		t := template.Must(template.ParseFile(base + "/page.html"))
+		t := template.Must(template.ParseFiles(base + "/page.html"))
 		t.Execute(w, bp)
 	default:
 		archive := GenArchivePage()
-		t := template.Must(template.ParseFile(base + "/archive.html"))
+		t := template.Must(template.ParseFiles(base + "/archive.html"))
 		t.Execute(w, archive)
 	}
 }
@@ -245,10 +245,10 @@ func main() {
 	http.HandleFunc(config.Blogdir, BlogServer)
 	http.Handle("/", http.FileServer(http.Dir(config.Root)))
 	for _, s := range config.Subdomains {
-		http.Handle(s.Domain, http.FileServer(http.Dir(config.Root + s.Path)))
+		http.Handle(s.Domain, http.FileServer(http.Dir(config.Root+s.Path)))
 	}
 	err := http.ListenAndServe(":80", nil)
 	if err != nil {
-		log.Fatal("ListenAndServe: ", err.String())
+		log.Fatal("ListenAndServe: ", err)
 	}
 }
