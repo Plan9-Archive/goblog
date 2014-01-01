@@ -8,11 +8,14 @@ import (
 	"github.com/russross/blackfriday"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"os/user"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"text/template"
 )
 
@@ -25,8 +28,9 @@ const (
 )
 
 var (
+	configpath = flag.String("config", "/lib/goweb.config", "Path to configuration file")
+	nobody = flag.Bool("nobody", false, "Switch to user nobody")
 	config     Config
-	configpath string
 )
 
 type Config struct {
@@ -97,7 +101,6 @@ func (bp bplist) Swap(i, j int) {
 }
 
 func init() {
-	flag.StringVar(&configpath, "config", "/lib/goweb.config", "Path to configuration file")
 	flag.Parse()
 }
 
@@ -147,9 +150,10 @@ func GenYear(year string) (res bplist) {
 
 func GenArchivePage() (res Archive) {
 	var y *ArchiveYear
-	f, _ := os.Open(config.Root + config.Blogdir)
-	defer f.Close()
-	fi, _ := f.Readdir(0)
+	fi, err := ioutil.ReadDir(config.Root + config.Blogdir)
+	if err != nil {
+		return res
+	}
 	for _, info := range fi {
 		if info.Mode().IsDir() {
 			y = &ArchiveYear{info.Name(), GenYear(info.Name())}
@@ -241,13 +245,35 @@ func ReadConfig(path string) (c Config) {
 }
 
 func main() {
-	config = ReadConfig(configpath)
+	u, err := user.Lookup("nobody")
+        if err != nil {
+                log.Fatalln(err)
+        }
+        uid, err := strconv.Atoi(u.Uid)
+        if err != nil {
+                log.Fatalln(err)
+        }
+
+	config = ReadConfig(*configpath)
 	http.HandleFunc(config.Blogdir, BlogServer)
 	http.Handle("/", http.FileServer(http.Dir(config.Root)))
 	for _, s := range config.Subdomains {
 		http.Handle(s.Domain, http.FileServer(http.Dir(config.Root+s.Path)))
 	}
-	err := http.ListenAndServe(":80", nil)
+
+	l, err := net.Listen("tcp", ":http")
+	if err != nil {
+                log.Fatalln(err)
+        }
+
+	if *nobody {
+		err = syscall.Setuid(uid)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}
+		
+	err = http.Serve(l, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
