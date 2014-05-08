@@ -41,7 +41,7 @@ type Config struct {
 }
 
 type Subdomain struct {
-	Domain string
+	Domains []string
 	Path   string
 }
 
@@ -258,7 +258,9 @@ func main() {
 	http.HandleFunc(config.Blogdir, BlogServer)
 	http.Handle("/", http.FileServer(http.Dir(config.Root)))
 	for _, s := range config.Subdomains {
-		http.Handle(s.Domain, http.FileServer(http.Dir(config.Root+s.Path)))
+		for _, sd := range s.Domains {
+			http.Handle(sd, http.FileServer(http.Dir(config.Root+s.Path)))
+		}
 	}
 
 	l, err := net.Listen("tcp", ":http")

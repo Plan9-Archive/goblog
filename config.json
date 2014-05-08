@@ -5,7 +5,7 @@
 	"Subdomains":
 	[
 		{
-			"Domain": "gproc.org/",
+			"Domains": [ "gproc.org/", "www.gproc.org/" ],
 			"Path": "/gproc/"
 		}
 	]
