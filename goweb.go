@@ -17,6 +17,7 @@ import (
 	"strings"
 	"syscall"
 	"text/template"
+	"time"
 )
 
 const (
@@ -31,6 +32,8 @@ var (
 	configpath = flag.String("config", "/lib/goweb.config", "Path to configuration file")
 	nobody = flag.Bool("nobody", false, "Switch to user nobody")
 	config     Config
+	f_logfile = flag.String("logfile", "/var/log/goweb.log", "Path to logging file")
+	logfile *bufio.Writer
 )
 
 type Config struct {
@@ -195,7 +198,9 @@ func NewRequest(path string) (r *Request) {
 }
 
 func BlogServer(w http.ResponseWriter, req *http.Request) {
-
+	ip := req.RemoteAddr[0:strings.Index(req.RemoteAddr, ":")]
+	logfile.WriteString(fmt.Sprintf("%v\t%v\t%s\t%v\n", time.Now().Format("2006/01/02 15:04:05"), ip, req.Method, req.URL))
+	logfile.Flush()
 	path := req.URL.Path[len(config.Blogdir):]
 	base := config.Root + config.Blogdir
 
@@ -244,7 +249,28 @@ func ReadConfig(path string) (c Config) {
 	return
 }
 
+type LogHandler struct {
+	h	http.Handler
+}
+
+func NewLogHandler(h http.Handler) *LogHandler {
+	return &LogHandler{ h }
+}
+
+func (l *LogHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	ip := req.RemoteAddr[0:strings.Index(req.RemoteAddr, ":")]
+	logfile.WriteString(fmt.Sprintf("%v\t%v\t%s\t%v\n", time.Now().Format("2006/01/02 15:04:05"), ip, req.Method, req.URL))
+	logfile.Flush()
+	l.h.ServeHTTP(rw, req)
+}
+
 func main() {
+	fi, err := os.OpenFile(*f_logfile, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0660)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	logfile = bufio.NewWriter(fi)
+
 	u, err := user.Lookup("nobody")
         if err != nil {
                 log.Fatalln(err)
@@ -256,7 +282,7 @@ func main() {
 
 	config = ReadConfig(*configpath)
 	http.HandleFunc(config.Blogdir, BlogServer)
-	http.Handle("/", http.FileServer(http.Dir(config.Root)))
+	http.Handle("/", NewLogHandler(http.FileServer(http.Dir(config.Root))))
 	for _, s := range config.Subdomains {
 		for _, sd := range s.Domains {
 			http.Handle(sd, http.FileServer(http.Dir(config.Root+s.Path)))
