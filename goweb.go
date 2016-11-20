@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -11,11 +12,9 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/user"
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"text/template"
 	"time"
 )
@@ -29,23 +28,27 @@ const (
 )
 
 var (
-	configpath = flag.String("config", "/lib/goweb.config", "Path to configuration file")
-	nobody = flag.Bool("nobody", false, "Switch to user nobody")
-	config     Config
-	f_logfile = flag.String("logfile", "/var/log/goweb.log", "Path to logging file")
-	logfile *bufio.Writer
+	config       Config
+	logfile      *bufio.Writer
+	f_configpath = flag.String("config", "/etc/goblog.conf", "Path to configuration file")
+	f_logfile    = flag.String("logfile", "/var/log/goblog/goblog.log", "Path to logging file")
+	f_httpAddr   = flag.String("httpaddr", ":80", "Listen address for HTTP")
+	f_httpsAddr  = flag.String("httpsaddr", ":443", "Listen address for HTTPS")
+	f_ssl        = flag.Bool("ssl", true, "Also serve SSL")
 )
 
 type Config struct {
 	Root       string
 	Blogdir    string
 	Shortname  string // disqus shortname
+	Cert       string
+	Key        string
 	Subdomains []Subdomain
 }
 
 type Subdomain struct {
 	Domains []string
-	Path   string
+	Path    string
 }
 
 type Request struct {
@@ -250,11 +253,11 @@ func ReadConfig(path string) (c Config) {
 }
 
 type LogHandler struct {
-	h	http.Handler
+	h http.Handler
 }
 
 func NewLogHandler(h http.Handler) *LogHandler {
-	return &LogHandler{ h }
+	return &LogHandler{h}
 }
 
 func (l *LogHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
@@ -269,18 +272,10 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
+	defer fi.Close()
 	logfile = bufio.NewWriter(fi)
 
-	u, err := user.Lookup("nobody")
-        if err != nil {
-                log.Fatalln(err)
-        }
-        uid, err := strconv.Atoi(u.Uid)
-        if err != nil {
-                log.Fatalln(err)
-        }
-
-	config = ReadConfig(*configpath)
+	config = ReadConfig(*f_configpath)
 	http.HandleFunc(config.Blogdir, BlogServer)
 	http.Handle("/", NewLogHandler(http.FileServer(http.Dir(config.Root))))
 	for _, s := range config.Subdomains {
@@ -289,20 +284,30 @@ func main() {
 		}
 	}
 
-	l, err := net.Listen("tcp", ":http")
+	l, err := net.Listen("tcp", *f_httpAddr)
 	if err != nil {
-                log.Fatalln(err)
-        }
+		log.Fatalln(err)
+	}
 
-	if *nobody {
-		err = syscall.Setuid(uid)
+	cert, err := tls.LoadX509KeyPair(config.Cert, config.Key)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	var secure net.Listener
+	if *f_ssl {
+		tlsconfig := &tls.Config{Certificates: []tls.Certificate{cert}}
+		secure, err = tls.Listen("tcp", *f_httpsAddr, tlsconfig)
 		if err != nil {
 			log.Fatalln(err)
 		}
 	}
-		
-	err = http.Serve(l, nil)
-	if err != nil {
-		log.Fatal("ListenAndServe: ", err)
+
+	if *f_ssl {
+		go func() {
+			log.Fatal(http.Serve(secure, nil))
+		}()
 	}
+
+	log.Fatal(http.Serve(l, nil))
 }

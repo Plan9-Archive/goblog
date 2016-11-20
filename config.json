@@ -2,6 +2,8 @@
 	"Root": "/usr/john/www/",
 	"Blogdir": "/b/",
 	"Shortname": "jfloren",
+	"Cert": "/path/to/ssl.cert",
+	"Key": "/path/to/ssl.key",
 	"Subdomains":
 	[
 		{
